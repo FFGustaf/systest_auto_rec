@@ -58,7 +58,7 @@ class CameraRecorder:
     def init_camera(self):
         """Initialize the camera and determine FPS."""
         try:
-            self.cap = cv2.VideoCapture(4)
+            self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened():
                 raise Exception("Could not open camera")
             
