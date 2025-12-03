@@ -15,6 +15,7 @@ from datetime import datetime
 import os
 from PIL import Image, ImageTk
 import argparse
+import time
 
 
 class CameraRecorder:
@@ -38,6 +39,11 @@ class CameraRecorder:
         self.preview_height = 720
         self.video_width = 1920
         self.video_height = 1080
+        self.last_preview_update = 0
+        self.last_status_update = 0
+        self.preview_update_interval = 1.0 / 30.0  # Update preview at 30 FPS max
+        self.status_update_interval = 0.1  # Update status every 100ms
+        self.frame_count = 0
         
         # Create output directory if it doesn't exist
         os.makedirs(self.output_dir, exist_ok=True)
@@ -59,6 +65,10 @@ class CameraRecorder:
             # Set camera resolution to Full HD
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.video_width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.video_height)
+            
+            # Set buffer size to 1 to minimize internal buffering and get latest frames
+            # This helps prevent frame drops by ensuring we always get the most recent frame
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             
             # Verify the resolution was set (camera may not support exact resolution)
             actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -141,34 +151,36 @@ class CameraRecorder:
                 print("Failed to read frame from camera")
                 break
             
-            # Resize frame to Full HD if needed
+            self.frame_count += 1
+            current_time = time.time()
+            
+            # Resize frame to Full HD if needed (do this before adding to buffer)
             frame_height, frame_width = frame.shape[:2]
             if frame_width != self.video_width or frame_height != self.video_height:
                 frame = cv2.resize(frame, (self.video_width, self.video_height))
             
-            # Add frame to buffer (thread-safe)
+            # Add frame to buffer (minimize lock time - only hold for append)
             with self.lock:
                 self.frame_buffer.append(frame.copy())
                 buffer_seconds = len(self.frame_buffer) / self.fps
             
-            # Update preview (thread-safe GUI update) - use original frame for preview
-            preview_frame = cv2.resize(frame, (self.preview_width, self.preview_height))
-            self.root.after(0, self.update_preview, preview_frame.copy())
+            # Throttle preview updates to avoid queueing too many GUI updates
+            if current_time - self.last_preview_update >= self.preview_update_interval:
+                preview_frame = cv2.resize(frame, (self.preview_width, self.preview_height))
+                self.root.after(0, self.update_preview, preview_frame)
+                self.last_preview_update = current_time
             
-            # Update status (thread-safe GUI update)
-            self.root.after(0, self.update_status, buffer_seconds)
-            
-            # Small delay to maintain frame rate
-            cv2.waitKey(1)
+            # Throttle status updates
+            if current_time - self.last_status_update >= self.status_update_interval:
+                self.root.after(0, self.update_status, buffer_seconds)
+                self.last_status_update = current_time
     
     def update_preview(self, frame):
         """Update the preview display with a new frame."""
         try:
-            # Resize frame for preview
-            frame_resized = cv2.resize(frame, (self.preview_width, self.preview_height))
-            
+            # Frame is already resized to preview size in capture_loop
             # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Convert to PIL Image
             img = Image.fromarray(frame_rgb)
