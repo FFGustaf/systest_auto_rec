@@ -16,6 +16,8 @@ import os
 from PIL import Image, ImageTk
 import argparse
 import time
+import subprocess
+import platform
 
 
 class CameraRecorder:
@@ -146,14 +148,26 @@ class CameraRecorder:
         self.buffer_slider.set(self.buffer_duration)
         self.buffer_slider.pack(side=tk.LEFT, padx=5)
         
+        # Button frame for Save and Open Folder buttons
+        button_frame = tk.Frame(self.root)
+        button_frame.pack(pady=10)
+        
         # Save button
         self.save_button = ttk.Button(
-            self.root,
+            button_frame,
             text="Save Video",
             command=self.on_save_button_clicked,
             state="normal" if self.cap else "disabled"
         )
-        self.save_button.pack(pady=10)
+        self.save_button.pack(side=tk.LEFT, padx=5)
+        
+        # Open folder button
+        self.open_folder_button = ttk.Button(
+            button_frame,
+            text="Open Folder",
+            command=self.open_output_folder
+        )
+        self.open_folder_button.pack(side=tk.LEFT, padx=5)
         
         # Info label
         self.info_label = tk.Label(
@@ -167,6 +181,31 @@ class CameraRecorder:
         # Bind spacebar key to save function
         self.root.bind('<space>', lambda event: self.on_save_button_clicked())
         self.root.focus_set()  # Allow window to receive keyboard events
+    
+    def open_output_folder(self):
+        """Open the output directory in the system file explorer."""
+        try:
+            if platform.system() == "Windows":
+                os.startfile(self.output_dir)
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", self.output_dir])
+            else:  # Linux and other Unix-like systems
+                subprocess.run(["xdg-open", self.output_dir])
+        except Exception as e:
+            print(f"Error opening folder: {e}")
+            with self.lock:
+                buffer_seconds = len(self.frame_buffer) / self.fps
+            self.status_label.config(
+                text=f"⚠️ Could not open folder: {e}",
+                bg="yellow",
+                fg="black"
+            )
+            # Reset after 3 seconds
+            self.root.after(3000, lambda: self.status_label.config(
+                text=f"Camera ready. Buffer: {buffer_seconds:.1f} seconds",
+                bg="lightgray",
+                fg="black"
+            ))
     
     def on_buffer_slider_changed(self, value):
         """Handle buffer size slider change."""
