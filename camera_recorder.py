@@ -19,12 +19,12 @@ import time
 
 
 class CameraRecorder:
-    def __init__(self, buffer_duration=30, output_dir="."):
+    def __init__(self, buffer_duration=15, output_dir="."):
         """
         Initialize the camera recorder.
         
         Args:
-            buffer_duration: Duration in seconds to keep in buffer (default: 30)
+            buffer_duration: Duration in seconds to keep in buffer (default: 15)
             output_dir: Directory to save video files (default: current directory)
         """
         self.buffer_duration = buffer_duration
@@ -94,10 +94,10 @@ class CameraRecorder:
     def setup_gui(self):
         """Setup the tkinter GUI."""
         self.root = tk.Tk()
-        self.root.title("Camera Recorder - 30 Second Buffer")
+        self.root.title("Camera Recorder")
         # Window size: preview width + padding, preview height + space for controls
         window_width = self.preview_width + 40
-        window_height = self.preview_height + 180
+        window_height = self.preview_height + 250
         self.root.geometry(f"{window_width}x{window_height}")
         
         # Preview label for camera feed
@@ -119,6 +119,30 @@ class CameraRecorder:
         )
         self.status_label.pack()
         
+        # Buffer size slider frame
+        slider_frame = tk.Frame(self.root)
+        slider_frame.pack(pady=5)
+        
+        # Buffer size label
+        self.buffer_label = tk.Label(
+            slider_frame,
+            text=f"Buffer Duration: {self.buffer_duration} seconds",
+            font=("Arial", 10)
+        )
+        self.buffer_label.pack(side=tk.LEFT, padx=5)
+        
+        # Buffer size slider
+        self.buffer_slider = tk.Scale(
+            slider_frame,
+            from_=5,
+            to=30,
+            orient=tk.HORIZONTAL,
+            length=200,
+            command=self.on_buffer_slider_changed
+        )
+        self.buffer_slider.set(self.buffer_duration)
+        self.buffer_slider.pack(side=tk.LEFT, padx=5)
+        
         # Save button
         self.save_button = ttk.Button(
             self.root,
@@ -131,7 +155,7 @@ class CameraRecorder:
         # Info label
         self.info_label = tk.Label(
             self.root,
-            text="Click 'Save Video' or press Spacebar to save the last 30 seconds",
+            text="Click 'Save Video' or press Spacebar to save the buffered video",
             font=("Arial", 10),
             fg="gray"
         )
@@ -140,6 +164,39 @@ class CameraRecorder:
         # Bind spacebar key to save function
         self.root.bind('<space>', lambda event: self.on_save_button_clicked())
         self.root.focus_set()  # Allow window to receive keyboard events
+    
+    def on_buffer_slider_changed(self, value):
+        """Handle buffer size slider change."""
+        new_duration = int(float(value))
+        if new_duration != self.buffer_duration:
+            self.update_buffer_size(new_duration)
+    
+    def update_buffer_size(self, new_duration):
+        """Update the buffer size to a new duration."""
+        with self.lock:
+            # Calculate new buffer size
+            new_buffer_size = self.fps * new_duration
+            
+            # Get current frames
+            current_frames = list(self.frame_buffer)
+            
+            # Create new buffer with new maxlen
+            new_buffer = deque(maxlen=new_buffer_size)
+            
+            # Copy frames from old buffer to new buffer
+            # If new buffer is smaller, only keep the most recent frames
+            frames_to_keep = min(len(current_frames), new_buffer_size)
+            for frame in current_frames[-frames_to_keep:]:
+                new_buffer.append(frame)
+            
+            # Replace old buffer with new buffer
+            self.frame_buffer = new_buffer
+            self.buffer_duration = new_duration
+            
+            # Update label
+            self.buffer_label.config(text=f"Buffer Duration: {self.buffer_duration} seconds")
+            
+            print(f"Buffer size updated to {new_duration} seconds ({new_buffer_size} frames)")
         
     def capture_loop(self):
         """Main loop to capture frames and update buffer.
@@ -329,8 +386,8 @@ def main():
     parser.add_argument(
         "-d", "--duration",
         type=int,
-        default=30,
-        help="Buffer duration in seconds (default: 30)"
+        default=15,
+        help="Buffer duration in seconds (default: 15, range: 5-30)"
     )
     
     args = parser.parse_args()
