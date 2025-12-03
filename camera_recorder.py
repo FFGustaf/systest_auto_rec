@@ -66,9 +66,10 @@ class CameraRecorder:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.video_width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.video_height)
             
-            # Set buffer size to 1 to minimize internal buffering and get latest frames
-            # This helps prevent frame drops by ensuring we always get the most recent frame
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # Allow OpenCV to buffer frames internally so we can capture ALL frames
+            # Setting a reasonable buffer size (e.g., 3-5 frames) allows OpenCV to queue
+            # frames while we process them, preventing frame drops
+            # Using default buffer (not setting it) or a small buffer works best
             
             # Verify the resolution was set (camera may not support exact resolution)
             actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -141,7 +142,8 @@ class CameraRecorder:
         self.root.focus_set()  # Allow window to receive keyboard events
         
     def capture_loop(self):
-        """Main loop to capture frames and update buffer."""
+        """Main loop to capture frames and update buffer.
+        This loop runs as fast as possible to capture ALL frames from the camera."""
         if not self.cap or not self.cap.isOpened():
             return
         
@@ -159,18 +161,20 @@ class CameraRecorder:
             if frame_width != self.video_width or frame_height != self.video_height:
                 frame = cv2.resize(frame, (self.video_width, self.video_height))
             
-            # Add frame to buffer (minimize lock time - only hold for append)
+            # Add frame to buffer immediately (minimize lock time - only hold for append)
+            # This ensures we capture every frame the camera provides
             with self.lock:
                 self.frame_buffer.append(frame.copy())
                 buffer_seconds = len(self.frame_buffer) / self.fps
             
             # Throttle preview updates to avoid queueing too many GUI updates
+            # This doesn't affect frame capture - we still capture all frames
             if current_time - self.last_preview_update >= self.preview_update_interval:
                 preview_frame = cv2.resize(frame, (self.preview_width, self.preview_height))
                 self.root.after(0, self.update_preview, preview_frame)
                 self.last_preview_update = current_time
             
-            # Throttle status updates
+            # Throttle status updates (doesn't affect frame capture)
             if current_time - self.last_status_update >= self.status_update_interval:
                 self.root.after(0, self.update_status, buffer_seconds)
                 self.last_status_update = current_time
