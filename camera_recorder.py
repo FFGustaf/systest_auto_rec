@@ -119,8 +119,8 @@ class CameraRecorder:
             font=("Arial", 14, "bold"),
             pady=10,
             bg="lightgray",
-            relief=tk.RAISED,
-            borderwidth=2
+            relief=tk.FLAT,
+            borderwidth=0
         )
         self.status_label.pack()
         
@@ -152,12 +152,18 @@ class CameraRecorder:
         button_frame = tk.Frame(self.root)
         button_frame.pack(pady=10)
         
+        # Create style for larger Save button
+        style = ttk.Style()
+        style.configure("Big.TButton", font=("Arial", 14, "bold"), padding=10)
+        
         # Save button
         self.save_button = ttk.Button(
             button_frame,
             text="Save Video",
             command=self.on_save_button_clicked,
-            state="normal" if self.cap else "disabled"
+            state="normal" if self.cap else "disabled",
+            style="Big.TButton",
+            width=15
         )
         self.save_button.pack(side=tk.LEFT, padx=5)
         
