@@ -296,6 +296,10 @@ class CameraRecorder:
 
 def main():
     """Main entry point."""
+    # Default output directory: script location + "clips"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_output_dir = os.path.join(script_dir, "clips")
+    
     parser = argparse.ArgumentParser(
         description="Camera recorder with 30-second buffer",
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -303,8 +307,8 @@ def main():
     parser.add_argument(
         "-o", "--output-dir",
         type=str,
-        default=".",
-        help="Directory to save video files (default: current directory)"
+        default=default_output_dir,
+        help=f"Directory to save video files (default: {default_output_dir})"
     )
     parser.add_argument(
         "-d", "--duration",
@@ -314,6 +318,9 @@ def main():
     )
     
     args = parser.parse_args()
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
     
     recorder = CameraRecorder(buffer_duration=args.duration, output_dir=args.output_dir)
     try:
