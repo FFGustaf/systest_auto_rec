@@ -110,12 +110,15 @@ class CameraRecorder:
         )
         self.preview_label.pack(pady=10)
         
-        # Status label
+        # Status label - make it more prominent
         self.status_label = tk.Label(
             self.root,
             text="Camera ready. Buffer: 0 seconds",
-            font=("Arial", 12),
-            pady=5
+            font=("Arial", 14, "bold"),
+            pady=10,
+            bg="lightgray",
+            relief=tk.RAISED,
+            borderwidth=2
         )
         self.status_label.pack()
         
@@ -258,9 +261,17 @@ class CameraRecorder:
     def update_status(self, buffer_seconds):
         """Update the status label in the GUI."""
         if self.is_saving:
-            self.status_label.config(text=f"Saving video... Buffer: {buffer_seconds:.1f} seconds")
+            self.status_label.config(
+                text=f"⏳ SAVING VIDEO... Buffer: {buffer_seconds:.1f} seconds",
+                bg="orange",
+                fg="white"
+            )
         else:
-            self.status_label.config(text=f"Camera ready. Buffer: {buffer_seconds:.1f} seconds")
+            self.status_label.config(
+                text=f"Camera ready. Buffer: {buffer_seconds:.1f} seconds",
+                bg="lightgray",
+                fg="black"
+            )
     
     def on_save_button_clicked(self):
         """Handle save button click - start saving video in background thread."""
@@ -269,16 +280,31 @@ class CameraRecorder:
         
         with self.lock:
             if len(self.frame_buffer) == 0:
-                self.status_label.config(text="No frames in buffer to save")
+                self.status_label.config(
+                    text="⚠️ No frames in buffer to save",
+                    bg="yellow",
+                    fg="black"
+                )
+                # Reset after 3 seconds
+                self.root.after(3000, lambda: self.status_label.config(
+                    text=f"Camera ready. Buffer: 0.0 seconds",
+                    bg="lightgray",
+                    fg="black"
+                ))
                 return
             
             # Get current buffer (copy to avoid modification during save)
             frames_to_save = list(self.frame_buffer)
             buffer_seconds = len(frames_to_save) / self.fps
         
-        # Disable button during save
-        self.save_button.config(state="disabled")
+        # Update button and status to show saving state
+        self.save_button.config(state="disabled", text="Saving...")
         self.is_saving = True
+        self.status_label.config(
+            text=f"⏳ SAVING VIDEO... ({len(frames_to_save)} frames)",
+            bg="orange",
+            fg="white"
+        )
         
         # Start save thread
         save_thread = threading.Thread(
@@ -333,19 +359,41 @@ class CameraRecorder:
     def on_save_complete(self, filename):
         """Called when video save is complete."""
         self.is_saving = False
-        self.save_button.config(state="normal")
-        self.status_label.config(text=f"Video saved: {filename}")
+        self.save_button.config(state="normal", text="Save Video")
         
-        # Reset status after 3 seconds
-        self.root.after(3000, lambda: self.status_label.config(
-            text=f"Camera ready. Buffer: {len(self.frame_buffer) / self.fps:.1f} seconds"
+        # Show success message prominently
+        with self.lock:
+            buffer_seconds = len(self.frame_buffer) / self.fps
+        
+        self.status_label.config(
+            text=f"✅ VIDEO SAVED: {filename}",
+            bg="green",
+            fg="white"
+        )
+        
+        # Reset status after 5 seconds (longer to see the success message)
+        self.root.after(5000, lambda: self.status_label.config(
+            text=f"Camera ready. Buffer: {buffer_seconds:.1f} seconds",
+            bg="lightgray",
+            fg="black"
         ))
     
     def on_save_error(self, error_msg):
         """Called when video save encounters an error."""
         self.is_saving = False
-        self.save_button.config(state="normal")
-        self.status_label.config(text=f"Error: {error_msg}")
+        self.save_button.config(state="normal", text="Save Video")
+        self.status_label.config(
+            text=f"❌ ERROR: {error_msg}",
+            bg="red",
+            fg="white"
+        )
+        
+        # Reset status after 5 seconds
+        self.root.after(5000, lambda: self.status_label.config(
+            text=f"Camera ready. Buffer: {len(self.frame_buffer) / self.fps:.1f} seconds",
+            bg="lightgray",
+            fg="black"
+        ))
     
     def run(self):
         """Start the application."""
